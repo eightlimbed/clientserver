@@ -2,9 +2,10 @@
 
 import socket
 import sys
+import _thread
 
 # Our server will listen on all interfaces, port 8888
-host = ''
+host = '0.0.0.0'
 port = 8888
 
 # Create a IP4v TCP socket
@@ -14,27 +15,34 @@ print('Socket created.')
 # Bind the socket to host:port
 try:
     s.bind((host, port))
-except socket.error:
-    print('Binding failed.')
+except socket.error as err:
+    print(err)
     sys.exit()
-print('[{}] listening on port {}'.format(host, port))
+print('[{}] listening on port {}...'.format(host, port))
 
-# Establish number of clients that can connect to the socket
-nclients = 10
-s.listen(nclients)
-print('Socket is ready for ' + str(nclients) + ' clients.')
+# Start listening
+s.listen()
 
-# Accept a request from outside
-conn, addr = s.accept() # returns a connection and the IP:port of the client
-print('Connected with ' + addr[0] + ':' + str(addr[1]))
+def client_handler(conn, addr):
+    # Handles client connections, listening for messages from them.
+    # This will spin off its own thread.
+    conn.send('\nWelcome to the server. Enter your message:\n'.encode())
+    while True:
+        data = conn.recv(1024)
+        if data.decode() == '':
+            print(addr[0] + ':' + str(addr[1]) + ' has been disconnected.')
+            break
+        reply = 'FROM [' + addr[0] + ':' + str(addr[1]) + ']: ' + data.decode()
+        if not data:
+            break
+        print(reply)
+    conn.close()
 
-# Receive data from client if they send anything
+# Accept requests from clients
 while True:
-    data = conn.recv(1024)
-    print('Message received: ' + data.decode())
-    if not data:
-        break
+    conn, addr = s.accept() # returns a connection and the IP:port of the client
+    print('Connected with ' + addr[0] + ':' + str(addr[1]))
+    _thread.start_new_thread(client_handler, (conn, addr))
 
-# Close the connection and the socket
-conn.close()
+# Close the socket
 s.close()
